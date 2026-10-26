@@ -1,0 +1,295 @@
+/*
+ * global.css — pingwin design language, ported to the code-server public pages.
+ *
+ * Shared by login.html and error.html. Everything lives in a stylesheet rather
+ * than a <style> block because these pages ship a strict CSP
+ * (`style-src 'self'`), which blocks both inline <style> and style="" attrs.
+ *
+ * Fonts are self-hosted next to this file and resolve relatively, so they work
+ * under any {{CS_STATIC_BASE}} / --abs-proxy-base-path without rewriting URLs.
+ * They are the same three faces pingwin-web uses, subset to latin and
+ * converted to woff2 (488 KB of ttf -> 84 KB), variable weight axes intact.
+ */
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("./space_grotesk.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("./manrope.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./jetbrains_mono.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
+
+:root {
+  /* Dark only, like pingwin — there is no light variant to fall back to, so
+     declaring `dark` (not `light dark`) also gets us dark form controls,
+     scrollbars and autofill chrome for free. */
+  color-scheme: dark;
+
+  --ink: #0b1014;
+  --ink-raise: #10171d;
+  --ink-press: #080c0f;
+
+  --line: #1e2a33;
+  --line-strong: #2c3d49;
+
+  --text: #d7e0e7;
+  --muted: #71838f;
+  --faint: #55666f;
+
+  --amber: #f2a33c;
+  --amber-press: #d88b25;
+  --amber-ink: #16110a;
+
+  --ok: #57c78a;
+  --danger: #e05f5f;
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* pingwin's three voices: display for the wordmark, body for prose, mono for
+     anything the machine owns (labels, hostnames, state words, buttons). */
+  --r-tight: 2px;
+  --r-base: 3px;
+  --r-panel: 4px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  margin: 0;
+  /* The signature login backdrop: a single warm amber bloom off the top edge
+     over near-black, so the card reads as lit rather than pasted on. */
+  background:
+    radial-gradient(ellipse 85% 55% at 50% -12%, rgba(242, 163, 60, 0.1), transparent 62%),
+    var(--ink);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(242, 163, 60, 0.28);
+  color: var(--text);
+}
+
+.center-container {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  width: 100%;
+  padding: 24px 20px;
+}
+
+/* ---------------------------------------------------------------- panel --- */
+
+.panel {
+  background: var(--ink-raise);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  min-width: 0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel-title > .caret {
+  flex: none;
+  color: var(--amber);
+}
+
+.panel-body {
+  padding: 32px 26px 26px;
+}
+
+.panel-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ----------------------------------------------------------------- icon --- */
+
+/* Stroke-based, 24-unit grid, currentColor — the same contract as pingwin's
+   <Svg> wrapper, so an icon always inherits the colour of its context. */
+.icon {
+  flex: none;
+  display: block;
+}
+
+/* ---------------------------------------------------------------- beacon --- */
+
+/* "Service is up" tell, lifted from pingwin's on-air indicator. */
+.beacon {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: beacon-pulse 2.6s ease-out infinite;
+}
+
+@keyframes beacon-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(242, 163, 60, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(242, 163, 60, 0);
+  }
+}
+
+/* ----------------------------------------------------------------- brand --- */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(242, 163, 60, 0.35);
+  border-radius: var(--r-panel);
+  background: linear-gradient(180deg, rgba(242, 163, 60, 0.13), rgba(242, 163, 60, 0.02));
+  color: var(--amber);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  line-height: 1;
+  color: var(--text);
+  /* letter-spacing leaves a phantom gap after the final glyph, which drags a
+     centred wordmark visibly left. Pulling the box in by one step re-centres it. */
+  margin-right: -0.3em;
+}
+
+.wordmark > .tail {
+  color: var(--amber);
+}
+
+.wordmark-sub {
+  /* A hostname is a machine value, so it belongs in the mono voice. */
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-top: -2px;
+}
+
+/* ---------------------------------------------------------------- button --- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--amber);
+  border-radius: var(--r-base);
+  background: var(--amber);
+  color: var(--amber-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.btn:hover {
+  background: var(--amber-press);
+  border-color: var(--amber-press);
+}
+
+.btn:active {
+  background: var(--amber-press);
+  transform: translateY(1px);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.btn > .icon {
+  transition: transform 150ms ease;
+}
+
+.btn:hover > .icon {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beacon {
+    animation: none;
+  }
+
+  .btn,
+  .btn > .icon {
+    transition: none;
+  }
+
+  .btn:active {
+    transform: none;
+  }
+}

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- user-scalable=no was dropped from the stock template: blocking pinch
+         zoom on a page whose only job is reading a password field is hostile. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="style-src 'self'; script-src 'self' 'unsafe-inline'; manifest-src 'self'; img-src 'self' data:; font-src 'self' data:;"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b1014" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Locked &middot; code-server</title>
+    <link rel="icon" href="{{CS_STATIC_BASE}}/src/browser/pages/favicon.svg" />
+    <link rel="alternate icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon.ico" />
+    <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" sizes="192x192" href="{{CS_STATIC_BASE}}/src/browser/media/pwa-icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="{{CS_STATIC_BASE}}/src/browser/media/pwa-icon-512.png" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/login.css" rel="stylesheet" />
+    <meta id="coder-options" data-settings="{{OPTIONS}}" />
+  </head>
+  <body>
+    <main class="center-container">
+      <section class="auth-card panel">
+        <header class="panel-title">
+          <svg class="icon caret" width="7" height="9" viewBox="0 0 8 10" fill="currentColor" aria-hidden="true">
+            <path d="M0 0l8 5-8 5z" />
+          </svg>
+          <span>Authentication required</span>
+          <span class="beacon" aria-hidden="true"></span>
+        </header>
+
+        <div class="panel-body">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+              <svg
+                class="icon"
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M5 7l5 5-5 5" />
+                <path d="M13 17h6" />
+              </svg>
+            </div>
+            <div class="wordmark">CODE<span class="tail">SERVER</span></div>
+            <div class="wordmark-sub">code.jalanpintas.web.id</div>
+          </div>
+
+          <form class="login-form" method="post">
+            <input class="user" type="text" autocomplete="username" />
+            <input id="base" type="hidden" name="base" value="{{BASE}}" />
+            <input id="href" type="hidden" name="href" value="" />
+
+            <div class="field">
+              <label for="password">Password</label>
+              <div class="input-wrap">
+                <svg
+                  class="icon input-icon"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="10.5" width="16" height="10.5" rx="2" />
+                  <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+                </svg>
+                <input
+                  id="password"
+                  required
+                  autofocus
+                  class="password"
+                  type="password"
+                  placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+                  name="password"
+                  autocomplete="current-password"
+                />
+              </div>
+            </div>
+
+            <!-- Server injects `<div class="error">…</div>` here. It sits with
+                 the field it is about, above the button, so the fix and the
+                 complaint are in the same glance. -->
+            {{ERROR}}
+
+            <button class="btn submit" type="submit">
+              <span>Unlock workspace</span>
+              <svg
+                class="icon"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12h13" />
+                <path d="M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </form>
+        </div>
+
+        <footer class="panel-foot">
+          <svg
+            class="icon"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
+          <span>TLS &middot; login rate limited</span>
+        </footer>
+      </section>
+    </main>
+
+    <script>
+      // Inform the backend about the path since the proxy might have rewritten
+      // it out of the headers and cookies must be set with absolute paths.
+      const el = document.getElementById("href")
+      if (el) {
+        el.value = location.href
+      }
+    </script>
+  </body>
+</html>

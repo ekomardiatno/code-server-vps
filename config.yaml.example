@@ -1,0 +1,25 @@
+# code-server config — copy to ~/.config/code-server/config.yaml and chmod 600.
+#
+# Generate the hash and keep the plaintext in a password manager. Only the hash
+# is ever written to disk:
+#
+#   PW=$(openssl rand -base64 24)
+#   echo "SAVE THIS: $PW"
+#   echo -n "$PW" | npx -y argon2-cli -e -id
+#
+# Note the -id. argon2-cli defaults to argon2i; code-server will accept either,
+# but argon2id is the variant you want for password hashing.
+
+# Loopback only. nginx terminates TLS and is the sole route in, so binding to
+# 0.0.0.0 here would quietly expose an unencrypted root-equivalent shell on a
+# port no firewall rule is expecting.
+bind-addr: 127.0.0.1:8093
+
+auth: password
+hashed-password: "$argon2id$v=19$m=4096,t=3,p=1$REPLACE$WITH-YOUR-OWN-HASH"
+
+# TLS is nginx's job.
+cert: false
+
+disable-telemetry: true
+disable-update-check: true

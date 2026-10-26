@@ -1,0 +1,159 @@
+/*
+ * login.css — the password gate for code.jalanpintas.web.id.
+ *
+ * Layout is a single 360px pingwin panel: a mono title bar with a live beacon,
+ * a typographic wordmark, one field, one button, and a hairline footer stating
+ * what protects the session. Everything else is noise on a login screen.
+ */
+
+body {
+  min-height: 560px;
+  min-width: 320px;
+}
+
+.auth-card {
+  width: 360px;
+  max-width: 100%;
+}
+
+.auth-card > .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+/* ------------------------------------------------------------------ form --- */
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Present for password managers, never shown. */
+.login-form > .user {
+  display: none;
+}
+
+.field > label {
+  display: block;
+  margin-bottom: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.input-wrap {
+  position: relative;
+  display: block;
+}
+
+.input-wrap > .input-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+  transition: color 150ms ease;
+}
+
+.input-wrap:focus-within > .input-icon {
+  color: var(--amber);
+}
+
+.password {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 12px 12px 12px 35px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-base);
+  background: var(--ink-press);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.password:hover:not(:focus) {
+  border-color: var(--muted);
+}
+
+.password:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(242, 163, 60, 0.1);
+}
+
+.password::placeholder {
+  color: #3f525c;
+  letter-spacing: 0.16em;
+}
+
+/* Chrome paints autofilled inputs a hard light blue, which would punch a hole
+   straight through the dark panel. The inset shadow is the only way to repaint
+   it, and the absurd transition delay stops it flashing back on blur. */
+.password:-webkit-autofill,
+.password:-webkit-autofill:hover,
+.password:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 1000px var(--ink-press) inset;
+  caret-color: var(--text);
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* ----------------------------------------------------------------- error --- */
+
+/* Server-rendered as a bare <div class="error">message</div>, so the icon has
+   to come from CSS. A mask (not background-image) keeps it on currentColor. */
+.login-form .error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(224, 95, 95, 0.45);
+  border-radius: var(--r-base);
+  background: rgba(224, 95, 95, 0.08);
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+
+.login-form .error::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* ------------------------------------------------------------- narrow vp --- */
+
+@media (max-width: 400px) {
+  .auth-card > .panel-body {
+    padding: 26px 18px 20px;
+    gap: 22px;
+  }
+
+  .panel-foot > span {
+    letter-spacing: 0.1em;
+  }
+}

@@ -1,0 +1,40 @@
+code-server-vps
+Copyright (c) 2026 Eko Mardiatno
+
+This product includes third-party material, listed below.
+
+================================================================================
+code-server
+================================================================================
+
+theme/login.html is a modified version of src/browser/pages/login.html from
+code-server, and theme/global.css, theme/login.css and theme/error.css replace
+their counterparts in the same directory. The template placeholders and the
+form contract are unchanged; the markup and styling are not.
+
+    https://github.com/coder/code-server
+    Copyright (c) 2019 Coder Technologies, Inc.
+    Licensed under the MIT License.
+
+================================================================================
+Fonts — SIL Open Font License, Version 1.1
+================================================================================
+
+The woff2 files in theme/fonts/ are Latin subsets of the upstream releases,
+produced with fonttools pyftsubset. They are unmodified in outline and metrics.
+The full licence text for each accompanies the font, as OFL 1.1 requires.
+
+Space Grotesk
+    Copyright 2020 The Space Grotesk Project Authors
+    https://github.com/floriankarsten/space-grotesk
+    theme/fonts/OFL-space-grotesk.txt
+
+Manrope
+    Copyright 2018 The Manrope Project Authors
+    https://github.com/googlefonts/manrope
+    theme/fonts/OFL-manrope.txt
+
+JetBrains Mono
+    Copyright 2020 The JetBrains Mono Project Authors
+    https://github.com/JetBrains/JetBrainsMono
+    theme/fonts/OFL-JetBrainsMono.txt

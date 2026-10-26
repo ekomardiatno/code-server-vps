@@ -1,0 +1,144 @@
+name: CI & deploy
+
+# SECURITY NOTE — this repo is public, and the deploy job holds an SSH key for
+# a host where the login user has passwordless sudo. The deploy job therefore
+# triggers ONLY on a release published by someone with write access, or a
+# manual dispatch. There is deliberately no `pull_request` trigger on it: a
+# fork PR must never be able to reach these secrets. The `check` job below is
+# the one that runs on PRs, and it needs no secrets at all.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax
+        run: bash -n apply.sh
+
+      - name: shellcheck
+        run: shellcheck apply.sh
+
+      - name: Template placeholders are intact
+        # code-server fills these in at render time. Dropping one silently
+        # breaks login: no {{BASE}} means the session cookie is set on the
+        # wrong path, and no {{ERROR}} means a wrong password looks like a
+        # no-op. Cheap to assert, miserable to debug.
+        run: |
+          for p in '{{BASE}}' '{{ERROR}}' '{{CS_STATIC_BASE}}' '{{OPTIONS}}'; do
+            grep -qF "$p" theme/login.html || { echo "::error::missing $p in theme/login.html"; exit 1; }
+          done
+          echo "all placeholders present"
+
+      - name: Form contract is intact
+        # The POST body is what the server actually reads.
+        run: |
+          grep -q 'name="password"' theme/login.html || { echo "::error::password input lost its name"; exit 1; }
+          grep -q 'method="post"' theme/login.html   || { echo "::error::form is no longer POST"; exit 1; }
+          echo "form contract ok"
+
+      - name: Fonts present and referenced
+        run: |
+          for f in space_grotesk manrope jetbrains_mono; do
+            test -s "theme/fonts/$f.woff2" || { echo "::error::missing theme/fonts/$f.woff2"; exit 1; }
+            grep -qF "./$f.woff2" theme/global.css || { echo "::error::global.css does not reference $f.woff2"; exit 1; }
+          done
+          echo "fonts ok"
+
+      - name: Font licences shipped
+        # The fonts are SIL OFL 1.1, which requires the licence to travel with
+        # them. Redistributing without it is the one way this public repo can
+        # actually be in the wrong.
+        run: |
+          ls theme/fonts/OFL-*.txt >/dev/null
+          test "$(ls theme/fonts/OFL-*.txt | wc -l)" -eq 3
+          echo "licences ok"
+
+      - name: No secrets in the example config
+        run: |
+          if grep -qE '\$argon2(id|i|d)\$v=19\$m=[0-9]+,t=[0-9]+,p=[0-9]+\$[A-Za-z0-9+/]{16,}\$' config.yaml.example; then
+            echo "::error::config.yaml.example looks like it contains a real hash"; exit 1
+          fi
+          echo "example config is clean"
+
+      - name: nginx config syntax
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq nginx >/dev/null
+          sudo cp nginx/conf.d/websocket-upgrade.conf /etc/nginx/conf.d/
+          sudo cp nginx/snippets/*.conf /etc/nginx/snippets/
+          # Strip the TLS bits: the cert does not exist on a runner, and nginx
+          # refuses to parse ssl_certificate pointing at a missing file.
+          sed -e '/ssl_certificate/d' -e '/options-ssl-nginx/d' -e '/ssl_dhparam/d' \
+              -e 's/listen 443 ssl http2;/listen 8443;/' \
+              -e 's/listen \[::\]:443 ssl http2;/listen [::]:8443;/' \
+              nginx/code.jalanpintas.web.id.conf | sudo tee /etc/nginx/sites-enabled/code-test >/dev/null
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo nginx -t
+
+  deploy:
+    name: deploy to vps
+    needs: check
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned host key rather than StrictHostKeyChecking=no, so a MITM on
+          # the runner's path cannot silently collect the deploy key.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Rsync to host
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude '.github' \
+            ./ "$USER@$HOST:~/code-server-vps/"
+
+      - name: Apply theme
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: ssh "$USER@$HOST" 'chmod +x ~/code-server-vps/apply.sh && ~/code-server-vps/apply.sh'
+
+      - name: Verify the login page still renders
+        env:
+          URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          : "${URL:=https://code.jalanpintas.web.id}"
+          code=$(curl -sS -o /tmp/login.html -w '%{http_code}' "$URL/login")
+          test "$code" = "200" || { echo "::error::login returned $code"; exit 1; }
+          # An unresolved placeholder means the template broke on the way in.
+          if grep -oE '\{\{[A-Z_]+\}\}' /tmp/login.html; then
+            echo "::error::unresolved template placeholders in the served page"; exit 1
+          fi
+          grep -q 'CODE<span class="tail">SERVER</span>' /tmp/login.html \
+            || { echo "::error::themed markup not present — did apply.sh run?"; exit 1; }
+          echo "login page OK"
