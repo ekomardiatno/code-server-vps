@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>id.my.ekomardiatno.code-server</string>
+
+	<!-- The symlink, not the versioned path: an upgrade is then just a re-link. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/code-server</string>
+	</array>
+
+	<!-- Everything else (bind-addr, auth, hash) comes from
+	     ~/.config/code-server/config.yaml so there is one source of truth. -->
+
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/ekomardiatno</string>
+
+	<!-- A LaunchAgent inherits almost no environment. HOME is what code-server
+	     uses to find its config and extensions; the PATH is a sane default for
+	     tasks and the integrated terminal before a login shell overrides it. -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/ekomardiatno</string>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<key>StandardOutPath</key>
+	<string>/Users/ekomardiatno/Library/Logs/code-server.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/ekomardiatno/Library/Logs/code-server.log</string>
+
+	<!-- It is an editor you type into, so keep it out of the background
+	     CPU/IO throttling tiers. -->
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

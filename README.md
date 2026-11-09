@@ -27,6 +27,7 @@ the install tree and a one-command way back in. That is `apply.sh`.
 theme/          login + error pages, favicon, and the three self-hosted fonts
 nginx/          the vhost, the websocket map, and the proxy/header snippets
 systemd/        memory caps for the code-server unit
+macos/          the launchd agent, LAN setup and cert scripts for the local Mac
 config.yaml.example
 apply.sh        re-install the theme after a code-server upgrade
 ```
@@ -34,6 +35,11 @@ apply.sh        re-install the theme after a code-server upgrade
 `nginx/` and `systemd/` are one-time setup, so `apply.sh` deliberately does not
 touch them — it only handles the part an upgrade destroys. They are kept here as
 the source of truth; if you edit them on the box, copy the change back.
+
+The same theme also runs on a local Mac, installed from the standalone tarball
+and started by a launchd agent instead of systemd, with code-server terminating
+its own TLS instead of nginx — `macos/` plus
+**[docs/macos.md](docs/macos.md)**.
 
 ---
 
