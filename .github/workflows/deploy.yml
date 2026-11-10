@@ -119,7 +119,7 @@ jobs:
           USER: ${{ secrets.DEPLOY_USER }}
         run: |
           rsync -az --delete \
-            --exclude '.git' --exclude '.github' \
+            --exclude '.git' --exclude '.github' --exclude 'docs' \
             ./ "$USER@$HOST:~/code-server-vps/"
 
       - name: Apply theme
@@ -127,6 +127,34 @@ jobs:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
         run: ssh "$USER@$HOST" 'chmod +x ~/code-server-vps/apply.sh && ~/code-server-vps/apply.sh'
+
+      - name: Check nginx and systemd have not drifted
+        # apply.sh only installs theme/. The nginx and systemd files here are
+        # copies of what is live, and nothing stops the two diverging — that is
+        # exactly how a stray `proxy_set_header Accept-Encoding gzip` survived
+        # on the host after being removed from the repo. Compare them and fail
+        # loudly, because a silent lie about source of truth is worse than none.
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          drift=0
+          check() {
+            if ! ssh "$USER@$HOST" "sudo cat '$2' 2>/dev/null" | diff -q - "$1" >/dev/null; then
+              echo "::error::$1 differs from $2 on the host"
+              drift=1
+            fi
+          }
+          check nginx/conf.d/websocket-upgrade.conf      /etc/nginx/conf.d/websocket-upgrade.conf
+          check nginx/snippets/code-server-proxy.conf    /etc/nginx/snippets/code-server-proxy.conf
+          check nginx/code.jalanpintas.web.id.conf       /etc/nginx/sites-available/code.jalanpintas.web.id
+          check systemd/override.conf                    /etc/systemd/system/code-server@.service.d/override.conf
+          if [ "$drift" -ne 0 ]; then
+            echo "::error::host config has drifted. Reconcile by hand, then re-release:"
+            echo "  scp the file, sudo nginx -t, sudo systemctl reload nginx"
+            exit 1
+          fi
+          echo "host config matches the repo"
 
       - name: Verify the login page still renders
         env:
