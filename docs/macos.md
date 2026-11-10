@@ -8,6 +8,13 @@ https://ekomardiatno.local:8093     Apple devices
 https://192.168.1.2:8093            everything else
 ```
 
+and from anywhere else via a reverse SSH tunnel to the VPS (§11), which gives it
+a real name and a real certificate without exposing the Mac:
+
+```
+https://mac.jalanpintas.web.id
+```
+
 Same editor, same login theme, same config shape as the VPS. What differs
 follows from one fact: **there is no nginx here, so code-server is its own
 edge.**
@@ -531,6 +538,155 @@ confirmed working; rolling back is then just pointing the symlink back.
 
 ---
 
+## 11. Reaching it from outside the LAN
+
+Everything above stops at the front door: the editor is on the LAN, under a
+`.local` name, behind a self-signed certificate. To reach it from anywhere, this
+Mac is *published through the vps* rather than exposed directly.
+
+```
+browser → vps nginx (real certificate) → 127.0.0.1:8094
+                                              ↑
+                              reverse SSH forward, dialled out by this Mac
+                                              ↓
+                                     this Mac, 127.0.0.1:8093
+```
+
+The Mac is the one that dials out, so it needs no public IP, no router port
+forward and no inbound firewall hole. Nothing on the vps listens publicly either
+— 8094 is bound to loopback, and nginx is the only thing that can reach it. When
+the Mac is asleep or off the network, 8094 has no listener and the vhost returns
+502. That is the intended failure mode, not a bug to paper over.
+
+A hosted tunnel (ngrok, Cloudflare Tunnel) would be less work, but it terminates
+TLS at someone else's edge. A session in this editor runs as a user with
+passwordless `sudo`, so that is not a reasonable thing to hand to a third party.
+Here the only plaintext is inside your own SSH transport between two machines
+you own.
+
+### The key must be able to do exactly one thing
+
+It lives on disk without a passphrase, because a launchd agent has nobody to
+type one. So the restriction has to come from the far end:
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/code_tunnel -N '' -C code-tunnel@mac
+```
+
+and in the vps's `~/.ssh/authorized_keys`, all on one line before the key:
+
+```
+restrict,command="/bin/false",port-forwarding,permitlisten="127.0.0.1:8094",permitopen="127.0.0.1:1"
+```
+
+> **`restrict` does not block command execution.** It turns off the pty, agent
+> and X11 forwarding, and user-rc — but `ssh host id` still runs. Without
+> `command="/bin/false"` this key is a shell on a passwordless-sudo box. The two
+> options have to be used together.
+
+`permitopen="127.0.0.1:1"` is a deliberately dead target: port-forwarding has to
+be re-enabled after `restrict` turns it off, and this leaves the outbound half
+pointing nowhere.
+
+Prove each restriction rather than assuming it:
+
+```sh
+K=(-i ~/.ssh/code_tunnel -o IdentitiesOnly=yes -o BatchMode=yes)
+H=ekomardiatno@code.jalanpintas.web.id
+
+ssh "${K[@]}" $H id                                            # no output = refused
+ssh "${K[@]}" -o ExitOnForwardFailure=yes -N -R 127.0.0.1:9999:127.0.0.1:8093 $H
+                                                               # "remote port forwarding failed"
+ssh "${K[@]}" -N -L 15432:127.0.0.1:5432 $H &                  # then push bytes through it:
+printf x | nc -w 5 127.0.0.1 15432                             # "administratively prohibited"
+```
+
+That last one matters: **`permitopen` is enforced when the channel opens, not
+when the forward is set up.** Testing it by merely establishing the `-L` always
+appears to pass.
+
+### The bind address in `-R` is not optional
+
+```sh
+ssh … -R 8094:127.0.0.1:8093 $H              # fails
+ssh … -R 127.0.0.1:8094:127.0.0.1:8093 $H    # works
+```
+
+The bare-port form sends an *empty* bind address, which does not match
+`permitlisten="127.0.0.1:8094"`, and you get `remote port forwarding failed for
+listen port 8094` with no hint as to why.
+
+### Keeping it up
+
+`macos/id.my.ekomardiatno.code-tunnel.plist` is a second launchd agent that does
+nothing but hold that forward open:
+
+```sh
+cp macos/id.my.ekomardiatno.code-tunnel.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/id.my.ekomardiatno.code-tunnel.plist
+```
+
+`ExitOnForwardFailure=yes` plus `ServerAliveInterval=30` / `ServerAliveCountMax=3`
+mean a dead link is noticed in about 90 seconds and the process exits rather than
+sitting there looking connected while the vhost 502s; `KeepAlive` then rebuilds
+it. Test it the honest way — `kill -9` the ssh process and watch `launchctl
+print` come back with `runs = 2`.
+
+The agent targets `code.jalanpintas.web.id`, not the IP, so the box can move
+without editing the plist. `StrictHostKeyChecking=yes` means that name needs its
+own `known_hosts` entry; add it only after confirming it presents the same keys
+as the IP you already trust:
+
+```sh
+for t in ssh-ed25519 ssh-rsa ecdsa-sha2-nistp256; do
+  diff <(ssh-keygen -F <ip> -f ~/.ssh/known_hosts | awk -v t=$t '$2==t{print $3}') \
+       <(ssh-keyscan -t $t code.jalanpintas.web.id 2>/dev/null | awk -v t=$t '$2==t{print $3}')
+done
+```
+
+### The vps side
+
+`nginx/mac.jalanpintas.web.id.conf`, built the same two-stage way as the main
+vhost (HTTP-only block, certbot, then TLS). Two differences from it:
+
+- `proxy_pass **https**://127.0.0.1:8094` with `proxy_ssl_verify off`, because
+  the Mac terminates its own TLS for the LAN and that certificate can never
+  validate for `127.0.0.1`. Confidentiality on that hop comes from SSH, not TLS.
+- its own `limit_req_zone` name (`mac_login`) — zone names are global to the
+  http context.
+
+`sshd/10-clientalive.conf` is the part that is easy to leave out and annoying to
+diagnose. sshd defaults to `ClientAliveInterval 0`, so when a laptop vanishes
+*without closing TCP* — sleep, network change, NAT timeout — only kernel TCP
+keepalive notices, which on a default Linux box is `7200 + 9×75s`, about 2h11m.
+For that whole window sshd holds the 8094 listener, every reconnect fails
+`ExitOnForwardFailure`, and the site 502s even though the Mac is wide awake.
+`ClientAliveInterval 60` / `ClientAliveCountMax 3` cuts it to ~3 minutes. These
+are in-protocol probes that any live client answers by itself, so idle-but-alive
+interactive sessions are unaffected.
+
+### Verifying
+
+```sh
+curl -sI http://mac.jalanpintas.web.id/              # 301 → https
+curl -s -o /dev/null -w '%{http_code}\n' https://mac.jalanpintas.web.id/login   # 200
+nc -z -G 5 <vps-ip> 8094 && echo exposed || echo refused                        # refused
+```
+
+> **A websocket probe over HTTP/2 always looks broken.** `curl` with
+> `Connection: Upgrade` gets a **302 to `/login`** through nginx but **401**
+> straight to code-server, and it is tempting to go hunting in the proxy
+> snippet. HTTP/2 forbids the `Connection` and `Upgrade` headers, so curl never
+> sends them, nginx never sees `$http_upgrade`, and the map yields `close`. Add
+> `--http1.1` and both answer 401. Browsers open the WebSocket on a separate
+> HTTP/1.1 connection, so the editor was never affected.
+
+Also re-patch `.wordmark-sub` in `login.html` to the public name once this is
+live — the login page states which host you are reaching, and after this step it
+is no longer the LAN one.
+
+---
+
 ## Where everything lives
 
 ```
@@ -545,8 +701,13 @@ confirmed working; rolling back is then just pointing the symlink back.
 ~/.local/share/code-server/
   User/settings.json                           theme + font settings
   extensions/                                  symlink to pingwin-vscode-theme
-~/Library/LaunchAgents/id.my.ekomardiatno.code-server.plist
+~/.ssh/code_tunnel{,.pub}                      tunnel key — no passphrase, locked
+                                               down by options on the vps instead
+~/Library/LaunchAgents/
+  id.my.ekomardiatno.code-server.plist         the editor
+  id.my.ekomardiatno.code-tunnel.plist         the reverse tunnel to the vps
 ~/Library/Logs/code-server.log
+~/Library/Logs/code-tunnel.log
 ```
 
 Nothing is installed outside `$HOME`. The root-only settings — `LocalHostName`

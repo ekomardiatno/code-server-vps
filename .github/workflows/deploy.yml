@@ -139,9 +139,9 @@ jobs:
           USER: ${{ secrets.DEPLOY_USER }}
         run: ssh "$USER@$HOST" 'chmod +x ~/code-server-vps/apply.sh && ~/code-server-vps/apply.sh'
 
-      - name: Check nginx and systemd have not drifted
-        # apply.sh only installs theme/. The nginx and systemd files here are
-        # copies of what is live, and nothing stops the two diverging — that is
+      - name: Check host config has not drifted
+        # apply.sh only installs theme/. The nginx, systemd and sshd files here
+        # are copies of what is live, and nothing stops the two diverging — that is
         # exactly how a stray `proxy_set_header Accept-Encoding gzip` survived
         # on the host after being removed from the repo. Compare them and fail
         # loudly, because a silent lie about source of truth is worse than none.
@@ -159,10 +159,16 @@ jobs:
           check nginx/conf.d/websocket-upgrade.conf      /etc/nginx/conf.d/websocket-upgrade.conf
           check nginx/snippets/code-server-proxy.conf    /etc/nginx/snippets/code-server-proxy.conf
           check nginx/code.jalanpintas.web.id.conf       /etc/nginx/sites-available/code.jalanpintas.web.id
+          check nginx/mac.jalanpintas.web.id.conf        /etc/nginx/sites-available/mac.jalanpintas.web.id
           check systemd/override.conf                    /etc/systemd/system/code-server@.service.d/override.conf
+          # Not nginx, but it is load-bearing for the mac vhost: without it
+          # sshd holds the tunnel's port for ~2h after the Mac disappears.
+          check sshd/10-clientalive.conf                 /etc/ssh/sshd_config.d/10-clientalive.conf
           if [ "$drift" -ne 0 ]; then
             echo "::error::host config has drifted. Reconcile by hand, then re-release:"
-            echo "  scp the file, sudo nginx -t, sudo systemctl reload nginx"
+            echo "  nginx/   scp, sudo nginx -t, sudo systemctl reload nginx"
+            echo "  systemd/ scp, sudo systemctl daemon-reload, restart the unit"
+            echo "  sshd/    scp, sudo sshd -t, sudo systemctl reload ssh"
             exit 1
           fi
           echo "host config matches the repo"

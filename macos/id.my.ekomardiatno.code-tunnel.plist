@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>id.my.ekomardiatno.code-tunnel</string>
+
+	<!-- Holds open one reverse forward: vps 127.0.0.1:8094 -> this Mac's
+	     code-server on 127.0.0.1:8093. nginx on the vps is the only thing that
+	     can reach 8094, so the editor is published under a real hostname with a
+	     real certificate without this Mac being reachable from the internet. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/ssh</string>
+		<!-- No session channel and no pty: this process only carries the
+		     forward. The key on the vps also has command="/bin/false", so even
+		     if these were dropped nothing could be run. -->
+		<string>-N</string>
+		<string>-T</string>
+
+		<string>-i</string>
+		<string>/Users/ekomardiatno/.ssh/code_tunnel</string>
+		<!-- Offer only that key. Without this, ssh walks the whole default key
+		     list first and the server may accept id_ed25519_vps instead — which
+		     carries none of the tunnel key's restrictions. -->
+		<string>-o</string>
+		<string>IdentitiesOnly=yes</string>
+
+		<!-- Never prompt. A LaunchAgent has no terminal to prompt on, so an
+		     interactive question would just hang forever. -->
+		<string>-o</string>
+		<string>BatchMode=yes</string>
+		<string>-o</string>
+		<string>StrictHostKeyChecking=yes</string>
+		<string>-o</string>
+		<string>UserKnownHostsFile=/Users/ekomardiatno/.ssh/known_hosts</string>
+
+		<!-- If the forward cannot be established, exit rather than sit there
+		     looking connected while the vhost 502s. KeepAlive then retries. -->
+		<string>-o</string>
+		<string>ExitOnForwardFailure=yes</string>
+		<string>-o</string>
+		<string>ConnectTimeout=15</string>
+
+		<!-- A laptop sleeps, changes network and sits behind NAT, so the TCP
+		     connection dies without a close far more often than it closes
+		     cleanly. These probes make this end notice within ~90s and exit so
+		     launchd can rebuild it. -->
+		<string>-o</string>
+		<string>ServerAliveInterval=30</string>
+		<string>-o</string>
+		<string>ServerAliveCountMax=3</string>
+
+		<!-- The explicit bind address is required, not cosmetic: the bare
+		     `-R 8094:...` form sends an empty bind address, which does not match
+		     the key's permitlisten="127.0.0.1:8094" and is refused. -->
+		<string>-R</string>
+		<string>127.0.0.1:8094:127.0.0.1:8093</string>
+		<!-- The vps, named rather than numbered so this survives the box moving.
+		     known_hosts carries all three of its host keys under this name as
+		     well as under the IP, verified identical. -->
+		<string>ekomardiatno@code.jalanpintas.web.id</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<!-- Default is 10s. The far end can take longer than that to reap a stale
+	     listener on 8094, and retrying in a tight loop only fills the log. -->
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+
+	<!-- An agent inherits almost no environment; ssh needs HOME to find
+	     ~/.ssh/config and the known_hosts default. -->
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/ekomardiatno</string>
+		<key>PATH</key>
+		<string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+
+	<key>StandardOutPath</key>
+	<string>/Users/ekomardiatno/Library/Logs/code-tunnel.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/ekomardiatno/Library/Logs/code-tunnel.log</string>
+</dict>
+</plist>

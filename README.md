@@ -25,20 +25,26 @@ the install tree and a one-command way back in. That is `apply.sh`.
 
 ```
 theme/          login + error pages, favicon, and the three self-hosted fonts
-nginx/          the vhost, the websocket map, and the proxy/header snippets
+nginx/          the two vhosts, the websocket map, and the proxy/header snippets
 systemd/        memory caps for the code-server unit
-macos/          the launchd agent, LAN setup and cert scripts for the local Mac
+sshd/           keepalive drop-in, so a dead tunnel does not hold its port
+macos/          the launchd agents, LAN setup and cert scripts for the local Mac
 config.yaml.example
 apply.sh        re-install the theme after a code-server upgrade
 ```
 
-`nginx/` and `systemd/` are one-time setup, so `apply.sh` deliberately does not
-touch them — it only handles the part an upgrade destroys. They are kept here as
-the source of truth; if you edit them on the box, copy the change back.
+`nginx/`, `systemd/` and `sshd/` are one-time setup, so `apply.sh` deliberately
+does not touch them — it only handles the part an upgrade destroys. They are the
+source of truth, and the deploy job proves it: it diffs each of them against the
+live host and fails the release on any difference. If you edit one on the box,
+copy the change back or the next release will stop.
 
 The same theme also runs on a local Mac, installed from the standalone tarball
 and started by a launchd agent instead of systemd, with code-server terminating
-its own TLS instead of nginx — `macos/` plus
+its own TLS instead of nginx. That Mac is also *published* through this box: a
+second launchd agent holds a reverse SSH tunnel open, and a second vhost serves
+it under its own name and certificate, so the Mac needs no public IP and no
+inbound firewall hole. See `macos/`, `sshd/` and
 **[docs/macos.md](docs/macos.md)**.
 
 ---
