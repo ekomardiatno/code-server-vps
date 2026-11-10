@@ -290,6 +290,23 @@ $FW --getglobalstate && $FW --getblockall
 network. It also means **`ping ekomardiatno.local` gets no reply** — use `curl`
 to test reachability, not ping.
 
+### What actually bounds the risk
+
+code-server rate-limits `/login` itself — **2 per minute and 12 per hour** — so
+guessing an argon2id hash of a password-manager password is not the threat. But
+read `out/node/routes/login.js` before leaning on it:
+
+```js
+const limiter = new RateLimiter();   // module scope — ONE bucket for everyone
+```
+
+It is **not per-IP**. A stranger on the same hotspot can spend all twelve, and
+then *you* get refused for the rest of the hour. That is a lockout nuisance
+rather than a breach, and it is the realistic consequence of `0.0.0.0`; the
+thing worth actually worrying about is a pre-auth bug in code-server, which no
+password strength helps with. Both are why the allow-list above is load-bearing
+rather than decorative.
+
 ---
 
 ## 6. Autostart — a LaunchAgent
@@ -681,9 +698,68 @@ nc -z -G 5 <vps-ip> 8094 && echo exposed || echo refused                        
 > `--http1.1` and both answer 401. Browsers open the WebSocket on a separate
 > HTTP/1.1 connection, so the editor was never affected.
 
+To prove a *real* session end to end, don't grep the nginx access log for `101`
+— nginx logs an upgraded connection only when it **closes**, so a healthy live
+editor shows zero of them. Check the things that are positive evidence instead:
+
+```sh
+# on the Mac: ssh↔node pairs over loopback 8093. Each line appears twice, once
+# per end, and a single editor tab holds two sockets (workbench + extension
+# host), so one live session is four lines.
+lsof -nP -iTCP:8093 -sTCP:ESTABLISHED
+grep 'ExtensionHostConnection' ~/Library/Logs/code-server.log | tail -2
+# on the vps: nginx↔sshd on the tunnel port
+ssh vps "sudo ss -tnp '( sport = :8094 or dport = :8094 )' | grep ESTAB"
+```
+
+Two 404s in the vps access log are expected and not worth chasing: `vsda.js` and
+`vsda_bg.wasm` are Microsoft's proprietary signing module, absent from the OSS
+build. And `VSCODE_RECONNECTION_GRACE_TIME=10800000ms` means a browser tab
+survives 3 hours of disconnection — comfortably longer than the ~3 minutes sshd
+now takes to reap a dead tunnel, so a sleep/wake usually reattaches the same
+session rather than reloading.
+
 Also re-patch `.wordmark-sub` in `login.html` to the public name once this is
 live — the login page states which host you are reaching, and after this step it
 is no longer the LAN one.
+
+### Living with it
+
+**A reboot brings it back, but not unattended.** Both agents are
+`~/Library/LaunchAgents` with `RunAtLoad`, and launchd loads those at **GUI
+login, not at boot**. This Mac has FileVault on and no auto-login
+(`defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser` →
+does not exist), so after a reboot the editor and the tunnel are both down until
+someone types the password at the unlock screen — and then both come up with no
+further action. A `LaunchDaemon` would not fix this: with FileVault the disk is
+not readable until a human authenticates, so there is nothing for a boot-time
+job to start. Accept the tradeoff or give up FileVault; there is no third
+option.
+
+**Changing network needs no action at all.** The tunnel dials *out*, so new
+wifi, tethering and NAT are all the same to it: the old link dies, the
+`ServerAlive` probes notice within ~90s, ssh exits, `KeepAlive` relaunches after
+`ThrottleInterval` (30s), and sshd's `ClientAlive` probes have already released
+the 8094 listener. Worst case is roughly two minutes of 502 with nothing to do
+but wait. Two things *will* break it:
+
+- **It only dials port 22.** The browser's leg is 443 and goes through
+  anything, but this leg is SSH, and a network that filters outbound 22 has no
+  fallback to offer it. The fix if that ever bites is a second `Port` in the vps
+  sshd config and a matching `-p` in the plist.
+- **Captive portals.** The forward comes up before you have accepted the terms,
+  fails, and retries into the portal until you open a browser once.
+
+**The LAN bind is now optional.** Before the tunnel, `0.0.0.0` was the only way
+to reach the editor from another device; now it is a convenience with a cost
+(§5). It is deliberately kept, but if you are going somewhere you would rather
+not listen on, it is two commands and the tunnel is unaffected because it
+targets `127.0.0.1:8093` from the Mac's own side:
+
+```sh
+sed -i '' 's/^bind-addr: .*/bind-addr: 127.0.0.1:8093/' ~/.config/code-server/config.yaml
+launchctl kickstart -k gui/$(id -u)/id.my.ekomardiatno.code-server
+```
 
 ---
 
