@@ -643,11 +643,19 @@ cp macos/id.my.ekomardiatno.code-tunnel.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/id.my.ekomardiatno.code-tunnel.plist
 ```
 
-`ExitOnForwardFailure=yes` plus `ServerAliveInterval=30` / `ServerAliveCountMax=3`
-mean a dead link is noticed in about 90 seconds and the process exits rather than
-sitting there looking connected while the vhost 502s; `KeepAlive` then rebuilds
+`ExitOnForwardFailure=yes` plus `ServerAliveInterval=20` / `ServerAliveCountMax=3`
+mean a dead link is noticed in about 60 seconds and the process exits rather than
+sitting there looking connected while the vhost 504s; `KeepAlive` then rebuilds
 it. Test it the honest way — `kill -9` the ssh process and watch `launchctl
 print` come back with `runs = 2`.
+
+Those 20s mirror `ClientAliveInterval` on the vps on purpose. Both ends are
+timing out the *same* dead link, and the outage lasts as long as the slower of
+the two, so tuning one alone buys nothing — lowering only sshd (v1.2.1) left
+this end taking 90s to notice, which then set the floor. `ThrottleInterval`
+stays at 30s: the far end now releases the 8094 listener at ~60s and this end
+retries at ~90s, so the retry still lands *after* the port is free, which is the
+property that matters.
 
 The agent targets `code.jalanpintas.web.id`, not the IP, so the box can move
 without editing the plist. `StrictHostKeyChecking=yes` means that name needs its
@@ -752,10 +760,10 @@ option.
 
 **Changing network needs no action at all.** The tunnel dials *out*, so new
 wifi, tethering and NAT are all the same to it: the old link dies, the
-`ServerAlive` probes notice within ~90s, ssh exits, `KeepAlive` relaunches after
-`ThrottleInterval` (30s), and sshd's `ClientAlive` probes release the 8094
-listener within ~60s. Worst case is a couple of minutes of 504 with nothing to
-do but wait. Two things *will* break it:
+`ServerAlive` probes notice within ~60s, ssh exits, `KeepAlive` relaunches after
+`ThrottleInterval` (30s), and sshd's `ClientAlive` probes have released the 8094
+listener by then. Worst case is roughly 90 seconds of 504 with nothing to do but
+wait. Two things *will* break it:
 
 - **It only dials port 22.** The browser's leg is 443 and goes through
   anything, but this leg is SSH, and a network that filters outbound 22 has no

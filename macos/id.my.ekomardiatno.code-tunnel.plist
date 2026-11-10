@@ -36,7 +36,7 @@
 		<string>UserKnownHostsFile=/Users/ekomardiatno/.ssh/known_hosts</string>
 
 		<!-- If the forward cannot be established, exit rather than sit there
-		     looking connected while the vhost 502s. KeepAlive then retries. -->
+		     looking connected while the vhost 504s. KeepAlive then retries. -->
 		<string>-o</string>
 		<string>ExitOnForwardFailure=yes</string>
 		<string>-o</string>
@@ -44,10 +44,12 @@
 
 		<!-- A laptop sleeps, changes network and sits behind NAT, so the TCP
 		     connection dies without a close far more often than it closes
-		     cleanly. These probes make this end notice within ~90s and exit so
-		     launchd can rebuild it. -->
+		     cleanly. These probes make this end notice within ~60s and exit so
+		     launchd can rebuild it. 20x3 deliberately mirrors the vps's
+		     ClientAliveInterval: both ends are giving up on the same dead link,
+		     the slower one sets the outage, so they are tuned as a pair. -->
 		<string>-o</string>
-		<string>ServerAliveInterval=30</string>
+		<string>ServerAliveInterval=20</string>
 		<string>-o</string>
 		<string>ServerAliveCountMax=3</string>
 
