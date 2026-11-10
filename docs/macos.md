@@ -677,10 +677,24 @@ diagnose. sshd defaults to `ClientAliveInterval 0`, so when a laptop vanishes
 *without closing TCP* — sleep, network change, NAT timeout — only kernel TCP
 keepalive notices, which on a default Linux box is `7200 + 9×75s`, about 2h11m.
 For that whole window sshd holds the 8094 listener, every reconnect fails
-`ExitOnForwardFailure`, and the site 502s even though the Mac is wide awake.
-`ClientAliveInterval 60` / `ClientAliveCountMax 3` cuts it to ~3 minutes. These
-are in-protocol probes that any live client answers by itself, so idle-but-alive
+`ExitOnForwardFailure`, and the site **504s** even though the Mac is wide awake.
+`ClientAliveInterval 20` / `ClientAliveCountMax 3` cuts it to ~60s. These are
+in-protocol probes that any live client answers by itself, so idle-but-alive
 interactive sessions are unaffected.
+
+**502 and 504 are different faults here, and the difference is the whole
+diagnosis.** A **502** is honest: nothing is listening on 8094, the Mac is
+asleep or the tunnel is down, nginx gets connection-refused instantly. A **504**
+means a stale sshd is still *holding* 8094 for a client that no longer exists —
+so nginx connects fine and then waits. On the vps, `sudo lsof -nP -iTCP:8094`
+names the holder (`ss -ltnp | grep 8094` has missed it) and
+`grep 'Address already in use' /var/log/auth.log` dates it; on the Mac the same
+event is `remote port forwarding failed for listen port 8094`, once per retry,
+in `~/Library/Logs/code-tunnel.log`. It clears itself, so **curl the vhost twice
+before changing anything**. Neither `launchctl kickstart -k` on the tunnel agent
+nor a hand-run `ssh -v -N -R …` helps while the port is held — and once the
+agent has reclaimed it, a hand-run `ssh` failing to bind is the *success*
+signal, not a fault.
 
 ### Verifying
 
@@ -715,8 +729,8 @@ ssh vps "sudo ss -tnp '( sport = :8094 or dport = :8094 )' | grep ESTAB"
 Two 404s in the vps access log are expected and not worth chasing: `vsda.js` and
 `vsda_bg.wasm` are Microsoft's proprietary signing module, absent from the OSS
 build. And `VSCODE_RECONNECTION_GRACE_TIME=10800000ms` means a browser tab
-survives 3 hours of disconnection — comfortably longer than the ~3 minutes sshd
-now takes to reap a dead tunnel, so a sleep/wake usually reattaches the same
+survives 3 hours of disconnection — comfortably longer than the ~60s sshd now
+takes to reap a dead tunnel, so a sleep/wake usually reattaches the same
 session rather than reloading.
 
 Also re-patch `.wordmark-sub` in `login.html` to the public name once this is
@@ -739,9 +753,9 @@ option.
 **Changing network needs no action at all.** The tunnel dials *out*, so new
 wifi, tethering and NAT are all the same to it: the old link dies, the
 `ServerAlive` probes notice within ~90s, ssh exits, `KeepAlive` relaunches after
-`ThrottleInterval` (30s), and sshd's `ClientAlive` probes have already released
-the 8094 listener. Worst case is roughly two minutes of 502 with nothing to do
-but wait. Two things *will* break it:
+`ThrottleInterval` (30s), and sshd's `ClientAlive` probes release the 8094
+listener within ~60s. Worst case is a couple of minutes of 504 with nothing to
+do but wait. Two things *will* break it:
 
 - **It only dials port 22.** The browser's leg is 443 and goes through
   anything, but this leg is SSH, and a network that filters outbound 22 has no
